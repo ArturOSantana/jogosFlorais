@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Troque pelos e-mails dos administradores (os mesmos criados em Authentication).
+    // Substitua pelos e-mails autorizados, iguais aos usuários de Authentication.
     function admin() {
       return request.auth != null
         && request.auth.token.email in ['admin1@exemplo.com', 'admin2@exemplo.com'];
@@ -12,7 +12,11 @@ service cloud.firestore {
         && request.resource.data.t in ['pp','sl','gg'];
       allow delete: if admin();
     }
-    match /atas/{id}    { allow read: if true; allow write: if admin(); }
+    match /atas/{id}    {
+      allow read: if true;
+      allow create, update, delete: if admin();
+    }
     match /equipes/{id} { allow read: if true; allow write: if admin(); }
+    match /config/{id}  { allow read: if true; allow write: if admin(); }
   }
 }

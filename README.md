@@ -4,12 +4,12 @@ Placar em tempo real das três equipes. Positivo soma, negativo remove; a posiç
 
 ## 1. Firebase
 1. Console Firebase > criar projeto > **Firestore Database** (modo produção).
-2. **Authentication** > Método de login > ativar *E-mail/senha* e criar o usuário administrador com a senha escolhida (aba Usuários).
-3. Configurações do projeto > *Seus apps* > Web (`</>`) > copie a configuração para o `.env`. Defina `VITE_ADMIN_USERNAME=terezinha.santa` e `VITE_ADMIN_EMAIL` com o e-mail usado no Firebase Authentication.
-4. Firestore > **Regras**: cole o `firestore.rules`, substitua os e-mails de exemplo pelo mesmo e-mail definido em `VITE_ADMIN_EMAIL` e publique.
+2. **Authentication** > Método de login > ativar *E-mail/senha* e criar um usuário para cada administrador (aba Usuários), cada um com seu próprio e-mail e senha.
+3. Configurações do projeto > *Seus apps* > Web (`</>`) > copie a configuração para o `.env`. Defina `VITE_ADMIN_EMAILS` como a lista de e-mails autorizados, separados por vírgulas. Opcionalmente, defina `VITE_ADMIN_USERNAME` como apelido de login do primeiro administrador; todos também podem entrar usando o próprio e-mail.
+4. Firestore > **Regras**: cole o `firestore.rules`, substitua os e-mails de exemplo pelos mesmos e-mails de `VITE_ADMIN_EMAILS` e publique.
 5. Authentication > Configurações > **Domínios autorizados**: adicione o domínio do Vercel.
 
-Visitantes veem somente o placar. Administradores autenticados com o e-mail configurado veem as demais abas e podem editar. O login `terezinha.santa` é associado ao e-mail configurado; a senha é validada pelo Firebase Authentication e não deve ser colocada no código ou no `.env`.
+Visitantes veem somente o placar. Todos os administradores autorizados podem entrar simultaneamente com seus próprios e-mails e senhas, e as alterações recebidas pelo Firestore aparecem em tempo real. Administradores podem pausar e retomar a atualização do placar para leitores; durante a pausa, os administradores continuam vendo a pontuação ao vivo. Administradores também podem apagar atas e lançamentos de katricos; a exclusão pede confirmação. Para evitar sobrescritas, não editem a mesma ata ou equipe ao mesmo tempo: o salvamento desses documentos substitui o documento inteiro, então a última gravação prevalece. Ajustes são registrados como lançamentos separados.
 
 ## 2. Rodar
 ```
@@ -19,7 +19,7 @@ npm test        # testa soma, remoção e posição
 ```
 
 ## 3. Vercel
-Suba para o GitHub, importe no Vercel e cadastre em *Settings > Environment Variables* as mesmas 6 variáveis `VITE_FIREBASE_*` do `.env`.
+Suba para o GitHub, importe no Vercel e cadastre em *Settings > Environment Variables* as 6 variáveis `VITE_FIREBASE_*` e `VITE_ADMIN_EMAILS` (e, se usado, `VITE_ADMIN_USERNAME`).
 
 ## Cálculo
 `total = soma dos totais das atas + soma dos ajustes de katricos`.

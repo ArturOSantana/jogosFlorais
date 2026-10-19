@@ -11,15 +11,21 @@ const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(r2(n));
 const eq = t => S.eq[t] || R0[t];
 const col = t => `style="--c:var(--${t})"`;
 const toast = m => { const e = $('#toast'); e.textContent = m; e.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => e.classList.remove('on'), 2400); };
-const guard = p => Promise.resolve(p).then(() => toast('Salvo')).catch(() => toast('Não foi possível salvar. Entre como administrador.'));
+const guard = p => Promise.resolve(p).then(() => { toast('Salvo'); return true; }).catch(err => { console.error('Não foi possível salvar.', err); toast('Não foi possível salvar. Verifique sua conexão e seu acesso de administrador.'); return false; });
 
 const hist = (n, del) => S.aj.length
   ? `<ul class=hist>${S.aj.slice(0, n).map(a => `<li><b style="color:var(--${a.t})">${sgn(a.v)}</b><span>${T[a.t].s}${a.m ? ': ' + esc(a.m) : ''}</span><time>${new Date(a.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</time>${del && admin ? `<button class=x data-a=del data-id="${a.id}" aria-label="Remover lançamento">✕</button>` : '<span></span>'}</li>`).join('')}</ul>`
   : '<p class=mute>Nenhum lançamento ainda.</p>';
 
 function vPlacar() {
-  const tot = totals(ids, S.atas, S.aj), rk = ranking(ids, tot), mx = Math.max(1, ...ids.map(i => Math.abs(tot[i]))), started = Object.keys(S.atas).length || S.aj.length;
+  if (st.cloud && !admin && !S.placar.loaded) return '<h1>Katricos</h1><p class=mute>Carregando placar...</p>';
+  if (st.cloud && !admin && S.placar.paused && !S.placar.snapshot) return '<h1>Katricos</h1><p class=note role=status>O placar está pausado pela organização.</p>';
+  const frozen = st.cloud && !admin && S.placar.paused ? S.placar.snapshot : null;
+  const shown = frozen || S;
+  const tot = totals(ids, shown.atas, shown.aj), rk = ranking(ids, tot), mx = Math.max(1, ...ids.map(i => Math.abs(tot[i]))), started = Object.keys(shown.atas).length || shown.aj.length;
   return `<div class=hero style="display:flex;align-items:center;gap:14px"><img src="/img/jogos.png" alt="" height=72><div><h1>Katricos</h1><p class=mute style="margin:0">Jogos Florais 2026</p></div></div>
+${frozen ? `<p class=note role=status>Atualização do placar pausada pela organização.</p>` : ''}
+${admin ? `<button class=btn data-a=togglePause ${!S.dataLoaded ? 'disabled' : ''}>${S.placar.paused ? 'Retomar atualização para leitores' : 'Pausar atualização para leitores'}</button><p class=mute>${!S.dataLoaded ? 'Aguarde o carregamento dos dados para pausar o placar.' : S.placar.paused ? 'Você continua vendo a pontuação ao vivo; leitores veem o placar congelado.' : 'Leitores acompanham a pontuação em tempo real.'}</p>` : ''}
 <section class=stage><i class=rod></i><div class=banners>${TEAMS.map(t => { const p = rk.find(r => r.id === t.id); return `<article class=bn style="--c:var(--${t.id});--k:${Math.max(0, tot[t.id]) / mx}"><span class=pos>${started ? p.pos + 'º' : '–'}</span><img src="/img/${t.id}.jpg" alt="${t.n}"><div class=nm>${t.s}</div><div class=big>${r2(tot[t.id])}</div><div class=un>katricos</div></article>`; }).join('')}</div></section>
 ${admin ? `<table class=comp><thead><tr><th></th>${TEAMS.map(t => `<th style="color:var(--${t.id})">${t.s}</th>`).join('')}</tr></thead><tbody>
 <tr><th>Atas</th>${ids.map(i => `<td>${ataTotal(S.atas, i)}</td>`).join('')}</tr>
@@ -47,7 +53,7 @@ function vAta() {
 <label for=juiz>Juiz</label><input id=juiz value="${esc(d.juiz)}" ${dis}>
 <label for=obs>Observações</label><textarea id=obs rows=3 ${dis}>${esc(d.obs)}</textarea>
 <button class=btn data-a=saveAta ${dis}>Salvar ata</button>
-<h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}</tr></thead><tbody>${done.map(x => { const a = S.atas[x.id], v = ids.map(t => sum(a.s[t])), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${x.n}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
+<h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const a = S.atas[x.id], v = ids.map(t => sum(a.s[t])), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${x.n}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar ata ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
 }
 function vEq() {
   return `<h2>Equipes</h2>${TEAMS.map(t => { const e = eq(t.id); return `<details ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt=""><span>${t.n}<br><small class=mute>${e.m.length + 2} integrantes</small></span></summary>
@@ -70,8 +76,21 @@ const act = {
   tab: d => { if (st.cloud && !admin && d.id !== 'placar') return; tab = d.id; render(); scrollTo(0, 0); },
   team: d => { K.t = d.id; render(); },
   val: d => { K.v = +d.n; render(); },
-  launch: () => { if (!K.v) return; const o = { t: K.t, v: K.v, m: K.m.trim(), ts: Date.now() }; K.m = ''; guard(st.addAj(o)); render(); },
-  del: d => guard(st.delAj(d.id)),
+  launch: () => { if (!K.v) return; const o = { t: K.t, v: K.v, m: K.m.trim(), ts: Date.now() }; guard(st.addAj(o)).then(saved => { if (saved) { K.m = ''; render(); } }); },
+  del: d => { if (admin && confirm('Apagar este lançamento de katricos?')) guard(st.delAj(d.id)); },
+  delAta: d => {
+    if (!admin || !confirm('Apagar esta ata? Esta ação não pode ser desfeita.')) return;
+    guard(st.delAta(d.id)).then(saved => {
+      if (saved) {
+        if (A === d.id) A = M[0].id;
+        render();
+      }
+    });
+  },
+  togglePause: () => {
+    if (!admin || !S.dataLoaded) return;
+    guard(st.setPlacarPaused(!S.placar.paused));
+  },
   openAta: d => { A = d.id; render(); scrollTo(0, 0); },
   saveAta: () => { const s = { pp: [], sl: [], gg: [] }; document.querySelectorAll('input[data-t]').forEach(i => s[i.dataset.t].push(+i.value || 0)); guard(st.saveAta(A, { s, juiz: $('#juiz').value.trim(), obs: $('#obs').value.trim(), ts: Date.now() })); },
   add: d => { const i = $('#ad-' + d.id), n = i.value.trim(); if (!n) return; const e = structuredClone(eq(d.id)); e.m.push(n); guard(st.saveEq(d.id, e)); },
@@ -89,7 +108,7 @@ $('#who').onclick = () => {
   if (!st.cloud) return;
   if (admin) return st.logout();
   const d = document.createElement('dialog');
-  d.innerHTML = '<form method=dialog><h2>Entrar</h2><label for=em>Login</label><input id=em type=text autocomplete=username><label for=pw>Senha</label><input id=pw type=password autocomplete=current-password><button class=btn>Entrar</button></form>';
+  d.innerHTML = '<form method=dialog><h2>Entrar</h2><label for=em>E-mail</label><input id=em type=email autocomplete=username><label for=pw>Senha</label><input id=pw type=password autocomplete=current-password><button class=btn>Entrar</button></form>';
   document.body.append(d); d.showModal();
   d.querySelector('form').onsubmit = async ev => { ev.preventDefault(); try { await st.login(d.querySelector('#em').value, d.querySelector('#pw').value); d.close(); d.remove(); } catch (err) { toast(err.message === 'admin-config' ? 'Configure o e-mail administrador no Firebase.' : 'Login ou senha incorretos.'); } };
   d.onclick = ev => { if (ev.target === d) { d.close(); d.remove(); } };
