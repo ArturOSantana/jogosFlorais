@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { totals, ranking, sum } from '../src/scoring.js';
+import { totals, ranking, sum, scoreSource } from '../src/scoring.js';
 const ids = ['pp', 'sl', 'gg'];
 test('positivo soma e negativo remove', () => {
   const aj = [{ t: 'sl', v: 5 }, { t: 'sl', v: -3 }, { t: 'gg', v: 10 }];
@@ -25,4 +25,20 @@ test('posição automática e empates', () => {
   assert.deepEqual(ranking(ids, { pp: 9, sl: 9, gg: 1 }).map(r => r.pos), [1, 1, 3]);
   assert.deepEqual(ranking(ids, { pp: 0, sl: 0, gg: 0 }).map(r => r.pos), [1, 1, 1]);
   assert.deepEqual(ranking(ids, { pp: -4, sl: 0, gg: -4 }).map(r => r.pos), [1, 2, 2]);
+});
+test('leitor vê a pontuação congelada enquanto administrador continua ao vivo', () => {
+  const frozen = { atas: { x: { s: { pp: [10] } } }, aj: [] };
+  const live = { dataLoaded: true, atas: { x: { s: { pp: [20] } } }, aj: [], placar: { loaded: true, paused: true, snapshot: frozen } };
+  assert.equal(scoreSource(live, false, true), frozen);
+  assert.equal(scoreSource(live, true, true), live);
+});
+test('leitor só recebe placar público depois de carregar dados e configuração', () => {
+  const state = { dataLoaded: true, atas: {}, aj: [], placar: { loaded: false, paused: false, snapshot: null } };
+  assert.equal(scoreSource(state, false, true), null);
+  state.placar = { loaded: true, paused: true, snapshot: null };
+  assert.equal(scoreSource(state, false, true), null);
+});
+test('leitor volta a ver pontuação ao vivo quando a pausa é removida', () => {
+  const state = { dataLoaded: true, atas: {}, aj: [], placar: { loaded: true, paused: false, snapshot: null } };
+  assert.equal(scoreSource(state, false, true), state);
 });

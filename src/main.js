@@ -1,14 +1,17 @@
 import './style.css';
 import { TEAMS, R0, G, M, idOf } from './data.js';
-import { totals, ranking, ataTotal, ajusteTotal, sum, r2 } from './scoring.js';
+import { totals, ranking, ataTotal, ajusteTotal, sum, r2, scoreSource } from './scoring.js';
 import * as st from './store.js';
 
 const ids = TEAMS.map(t => t.id), T = Object.fromEntries(TEAMS.map(t => [t.id, t]));
-let S = { atas: {}, aj: [], eq: {} }, tab = 'placar', admin = false, K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false;
+let S = { atas: {}, aj: [], eq: {}, dataLoaded: !st.cloud, placar: { paused: false, snapshot: null, loaded: !st.cloud } }, tab = 'placar', admin = false, K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(r2(n));
-const eq = t => S.eq[t] || R0[t];
+const eq = t => {
+  const saved = S.eq[t] || {};
+  return { ...R0[t], ...saved, m: Array.isArray(saved.m) ? saved.m : R0[t].m };
+};
 const col = t => `style="--c:var(--${t})"`;
 const toast = m => { const e = $('#toast'); e.textContent = m; e.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => e.classList.remove('on'), 2400); };
 const guard = p => Promise.resolve(p).then(() => { toast('Salvo'); return true; }).catch(err => { console.error('Não foi possível salvar.', err); toast('Não foi possível salvar. Verifique sua conexão e seu acesso de administrador.'); return false; });
@@ -18,10 +21,9 @@ const hist = (n, del) => S.aj.length
   : '<p class=mute>Nenhum lançamento ainda.</p>';
 
 function vPlacar() {
-  if (st.cloud && !admin && !S.placar.loaded) return '<h1>Katricos</h1><p class=mute>Carregando placar...</p>';
-  if (st.cloud && !admin && S.placar.paused && !S.placar.snapshot) return '<h1>Katricos</h1><p class=note role=status>O placar está pausado pela organização.</p>';
-  const frozen = st.cloud && !admin && S.placar.paused ? S.placar.snapshot : null;
-  const shown = frozen || S;
+  const shown = scoreSource(S, admin, st.cloud);
+  if (!shown) return `<h1>Katricos</h1><p class=${S.placar.loaded && S.placar.paused ? 'note' : 'mute'} role=status>${S.placar.loaded && S.placar.paused ? 'O placar está pausado pela organização.' : 'Carregando placar...'}</p>`;
+  const frozen = st.cloud && !admin && S.placar.paused;
   const tot = totals(ids, shown.atas, shown.aj), rk = ranking(ids, tot), mx = Math.max(1, ...ids.map(i => Math.abs(tot[i]))), started = Object.keys(shown.atas).length || shown.aj.length;
   return `<div class=hero style="display:flex;align-items:center;gap:14px"><img src="/img/jogos.png" alt="" height=72><div><h1>Katricos</h1><p class=mute style="margin:0">Jogos Florais 2026</p></div></div>
 ${frozen ? `<p class=note role=status>Atualização do placar pausada pela organização.</p>` : ''}
@@ -30,7 +32,13 @@ ${admin ? `<button class=btn data-a=togglePause ${!S.dataLoaded ? 'disabled' : '
 ${admin ? `<table class=comp><thead><tr><th></th>${TEAMS.map(t => `<th style="color:var(--${t.id})">${t.s}</th>`).join('')}</tr></thead><tbody>
 <tr><th>Atas</th>${ids.map(i => `<td>${ataTotal(S.atas, i)}</td>`).join('')}</tr>
 <tr><th>Ajustes</th>${ids.map(i => `<td>${sgn(ajusteTotal(S.aj, i))}</td>`).join('')}</tr></tbody></table>
-<h2>Últimos lançamentos</h2>${hist(5, false)}` : ''}`;
+<h2>Últimos lançamentos</h2>${hist(5, false)}` : ''}
+`;
+}
+function vInfo() {
+  return `<h2>Instagram das equipes</h2><div class=ig-links>${TEAMS.map(t => `<a class=ig-link ${col(t.id)} href="${esc(t.ig)}" target=_blank rel="noopener noreferrer"><span>${t.n}</span><strong>Ver Instagram ↗</strong></a>`).join('')}</div>
+<section class=documents><h2>Documentos</h2><a class=doc-link href="/Regulamento%202026.pdf" target=_blank rel="noopener noreferrer">Ler o regulamento 2026 (PDF) ↗</a>
+</section>`;
 }
 function vKat() {
   const v = K.v, lbl = !v ? 'Informe um valor' : v > 0 ? `Dar ${v} katricos para ${T[K.t].s}` : `Tirar ${Math.abs(v)} katricos de ${T[K.t].s}`;
@@ -56,24 +64,34 @@ function vAta() {
 <h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const a = S.atas[x.id], v = ids.map(t => sum(a.s[t])), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${x.n}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar ata ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
 }
 function vEq() {
-  return `<h2>Equipes</h2>${TEAMS.map(t => { const e = eq(t.id); return `<details ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt=""><span>${t.n}<br><small class=mute>${e.m.length + 2} integrantes</small></span></summary>
-<p><b>Líder:</b> ${esc(e.l)}<br><b>Vice:</b> ${esc(e.v)}</p><ul class=names>${e.m.map((n, i) => `<li>${esc(n)}${admin ? `<button class=x data-a=rm data-id=${t.id} data-n=${i} aria-label="Remover ${esc(n)}">✕</button>` : ''}</li>`).join('')}</ul>
-${admin ? `<div class=row><input id=ad-${t.id} aria-label="Novo integrante de ${t.s}"><button class=btn data-a=add data-id=${t.id}>Adicionar</button></div>` : ''}</details>`; }).join('')}`;
+  return `<h2>Equipes</h2><p class=mute>Consulte os integrantes e, como administrador, altere os nomes e cargos quando necessário.</p>${TEAMS.map(t => { const e = eq(t.id), count = e.m.filter(Boolean).length + Number(Boolean(e.l)) + Number(Boolean(e.v)); return `<details data-team=${t.id} ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt=""><span>${t.n}<br><small class=mute>${count} integrantes</small></span></summary>
+<p><a class=team-ig href="${esc(t.ig)}" target=_blank rel="noopener noreferrer">Instagram oficial de ${t.n} ↗</a></p>
+${admin ? `<div class=team-editor><div class=team-fields><label>Líder<input data-role=l value="${esc(e.l)}" aria-label="Líder da equipe ${t.s}"></label><label>Vice-líder<input data-role=v value="${esc(e.v)}" aria-label="Vice-líder da equipe ${t.s}"></label></div>
+<h3>Integrantes</h3><ul class=names>${e.m.map((n, i) => `<li><input data-member value="${esc(n)}" aria-label="Integrante ${i + 1} da equipe ${t.s}"><button class=x data-a=rm data-id=${t.id} data-n=${i} aria-label="Remover integrante ${i + 1}">✕</button></li>`).join('')}</ul>
+<div class=row><input id=ad-${t.id} aria-label="Novo integrante de ${t.s}" placeholder="Nome do integrante"><button class=btn data-a=add data-id=${t.id}>Adicionar</button></div><button class=btn data-a=saveTeam data-id=${t.id}>Salvar alterações</button></div>` : `<p><b>Líder:</b> ${esc(e.l || 'Não informado')}<br><b>Vice-líder:</b> ${esc(e.v || 'Não informado')}</p><ul class=names>${e.m.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`}</details>`; }).join('')}`;
 }
 function render() {
-  if (st.cloud && !admin && tab !== 'placar') tab = 'placar';
-  const tabs = [['placar', 'Placar'], ['kat', 'Katricos'], ['ata', 'Atas'], ['eq', 'Equipes']];
-  $('#tabs').innerHTML = (admin || !st.cloud ? tabs : tabs.slice(0, 1)).map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-a=tab data-id=${k}>${n}</button>`).join('');
+  if (st.cloud && !admin && !['placar', 'info'].includes(tab)) tab = 'placar';
+  const tabs = [['placar', 'Placar'], ['info', 'Informações'], ['kat', 'Katricos'], ['ata', 'Atas'], ['eq', 'Equipes']];
+  $('#tabs').innerHTML = (admin || !st.cloud ? tabs : tabs.slice(0, 2)).map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-a=tab data-id=${k}>${n}</button>`).join('');
   $('#tabs').classList.toggle('readonly', st.cloud && !admin);
   $('#who').textContent = !st.cloud ? 'Modo local' : admin ? 'Sair' : 'Entrar';
   const note = !st.cloud ? '<p class=note>Firebase não configurado: os dados ficam só neste aparelho.</p>' : '';
-  $('#app').innerHTML = note + { placar: vPlacar, kat: vKat, ata: vAta, eq: vEq }[tab]();
+  $('#app').innerHTML = note + { placar: vPlacar, info: vInfo, kat: vKat, ata: vAta, eq: vEq }[tab]();
 }
 const refresh = () => { if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { pend = true; return; } render(); };
 document.addEventListener('focusout', () => { if (pend) { pend = false; setTimeout(refresh, 60); } });
+const readTeamEditor = id => {
+  const form = document.querySelector(`[data-team="${id}"]`);
+  return {
+    l: form.querySelector('[data-role="l"]').value.trim(),
+    v: form.querySelector('[data-role="v"]').value.trim(),
+    m: [...form.querySelectorAll('[data-member]')].map(input => input.value.trim()).filter(Boolean),
+  };
+};
 
 const act = {
-  tab: d => { if (st.cloud && !admin && d.id !== 'placar') return; tab = d.id; render(); scrollTo(0, 0); },
+  tab: d => { if (st.cloud && !admin && !['placar', 'info'].includes(d.id)) return; tab = d.id; render(); scrollTo(0, 0); },
   team: d => { K.t = d.id; render(); },
   val: d => { K.v = +d.n; render(); },
   launch: () => { if (!K.v) return; const o = { t: K.t, v: K.v, m: K.m.trim(), ts: Date.now() }; guard(st.addAj(o)).then(saved => { if (saved) { K.m = ''; render(); } }); },
@@ -93,8 +111,21 @@ const act = {
   },
   openAta: d => { A = d.id; render(); scrollTo(0, 0); },
   saveAta: () => { const s = { pp: [], sl: [], gg: [] }; document.querySelectorAll('input[data-t]').forEach(i => s[i.dataset.t].push(+i.value || 0)); guard(st.saveAta(A, { s, juiz: $('#juiz').value.trim(), obs: $('#obs').value.trim(), ts: Date.now() })); },
-  add: d => { const i = $('#ad-' + d.id), n = i.value.trim(); if (!n) return; const e = structuredClone(eq(d.id)); e.m.push(n); guard(st.saveEq(d.id, e)); },
-  rm: d => { const e = structuredClone(eq(d.id)); e.m.splice(+d.n, 1); guard(st.saveEq(d.id, e)); },
+  saveTeam: d => { if (admin) guard(st.saveEq(d.id, readTeamEditor(d.id))); },
+  add: d => {
+    if (!admin) return;
+    const name = $('#ad-' + d.id).value.trim();
+    if (!name) return;
+    const team = readTeamEditor(d.id);
+    team.m.push(name);
+    guard(st.saveEq(d.id, team)).then(saved => { if (saved) render(); });
+  },
+  rm: d => {
+    if (!admin) return;
+    const team = readTeamEditor(d.id);
+    team.m.splice(+d.n, 1);
+    guard(st.saveEq(d.id, team)).then(saved => { if (saved) render(); });
+  },
 };
 document.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { e.preventDefault(); const k = b.closest('details')?.open; act[b.dataset.a]?.(b.dataset); if (k && tab === 'eq') document.querySelectorAll('details').forEach(x => x.open = x.contains(b)); } });
 document.addEventListener('input', e => {
@@ -102,13 +133,16 @@ document.addEventListener('input', e => {
   if (i === 'v') K.v = +e.target.value; if (i === 'm') K.m = e.target.value;
   if (i === 'live') ids.forEach(t => { let x = 0; document.querySelectorAll(`input[data-t=${t}]`).forEach(n => x += +n.value || 0); $('#tt-' + t).textContent = r2(x); });
 });
-document.addEventListener('change', e => { if (e.target.dataset.c === 'ata') { A = e.target.value; render(); } if (e.target.dataset.i === 'v') render(); });
+document.addEventListener('change', e => {
+  if (e.target.dataset.c === 'ata') { A = e.target.value; render(); }
+  if (e.target.dataset.i === 'v') render();
+});
 
 $('#who').onclick = () => {
   if (!st.cloud) return;
   if (admin) return st.logout();
   const d = document.createElement('dialog');
-  d.innerHTML = '<form method=dialog><h2>Entrar</h2><label for=em>E-mail</label><input id=em type=email autocomplete=username><label for=pw>Senha</label><input id=pw type=password autocomplete=current-password><button class=btn>Entrar</button></form>';
+  d.innerHTML = '<form method=dialog><h2>Entrar</h2><label for=em>Login</label><input id=em type=text autocomplete=username><label for=pw>Senha</label><input id=pw type=password autocomplete=current-password><button class=btn>Entrar</button></form>';
   document.body.append(d); d.showModal();
   d.querySelector('form').onsubmit = async ev => { ev.preventDefault(); try { await st.login(d.querySelector('#em').value, d.querySelector('#pw').value); d.close(); d.remove(); } catch (err) { toast(err.message === 'admin-config' ? 'Configure o e-mail administrador no Firebase.' : 'Login ou senha incorretos.'); } };
   d.onclick = ev => { if (ev.target === d) { d.close(); d.remove(); } };

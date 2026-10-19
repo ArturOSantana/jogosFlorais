@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { resolveAdminEmail } from './auth.js';
 
 const e = import.meta.env;
 const cfg = { apiKey: e.VITE_FIREBASE_API_KEY, authDomain: e.VITE_FIREBASE_AUTH_DOMAIN, projectId: e.VITE_FIREBASE_PROJECT_ID, storageBucket: e.VITE_FIREBASE_STORAGE_BUCKET, messagingSenderId: e.VITE_FIREBASE_MESSAGING_SENDER_ID, appId: e.VITE_FIREBASE_APP_ID };
@@ -8,8 +9,7 @@ const adminEmails = (e.VITE_ADMIN_EMAILS || e.VITE_ADMIN_EMAIL || '')
   .split(',')
   .map(email => email.trim().toLowerCase())
   .filter(Boolean);
-const adminEmail = adminEmails[0] || '';
-const adminUsername = (e.VITE_ADMIN_USERNAME || 'terezinha.santa').trim().toLowerCase();
+const configuredAdminUsername = (e.VITE_ADMIN_USERNAME || '').trim().toLowerCase();
 export const cloud = Boolean(cfg.apiKey && cfg.projectId);
 let db, auth;
 if (cloud) { const app = initializeApp(cfg); db = getFirestore(app); auth = getAuth(app); }
@@ -49,8 +49,7 @@ export function watch(cb) {
 }
 export const onAdmin = cb => (cloud ? onAuthStateChanged(auth, u => cb(adminEmails.includes(u?.email?.trim().toLowerCase()))) : cb(true));
 export const login = (username, pass) => {
-  const loginId = username.trim().toLowerCase();
-  const email = adminEmails.includes(loginId) ? loginId : loginId === adminUsername ? adminEmail : '';
+  const email = resolveAdminEmail(username, adminEmails, ['terezinha.santa', configuredAdminUsername]);
   if (!email || !adminEmails.includes(email)) return Promise.reject(new Error('admin-config'));
   return signInWithEmailAndPassword(auth, email, pass);
 };

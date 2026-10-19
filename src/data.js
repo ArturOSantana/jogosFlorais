@@ -1,7 +1,7 @@
 export const TEAMS = [
-  { id: 'pp', n: 'São Padre Pio', s: 'Padre Pio' },
-  { id: 'sl', n: 'São Luís IX', s: 'São Luís IX' },
-  { id: 'gg', n: 'Santa Gemma Galgani', s: 'Gemma' },
+  { id: 'pp', n: 'São Padre Pio', s: 'Padre Pio', ig: 'https://www.instagram.com/saopadrepio.oficial/' },
+  { id: 'sl', n: 'São Luís IX', s: 'São Luís IX', ig: 'https://www.instagram.com/saoluisreiix/' },
+  { id: 'gg', n: 'Santa Gemma Galgani', s: 'Gemma', ig: 'https://www.instagram.com/santa_gemma_jf2k26?utm_source=ig_web_button_share_sheet&exln=ZDNlZDc0MzIxNw==' },
 ];
 export const R0 = {
   pp: { l: 'João Pedro Amorim de Albuquerque', v: 'Alyces Santos da Silva', m: ['Rhyanna Gabrielli da Silva Pereira', 'Ana Carolina Brito Rigueira', 'Letícia Soares Freire', 'Ana Giulia Silva Marques', 'Larissa Oliveira', 'Pedro Henrique Neves Pereira', 'Sophia Santana Silva', 'Nycollas Holanda', 'Heitor Barbosa Souza', 'María Vitória Gandon Costa dos Santos', 'Diogo Nunes Vasconcelos da Silva', 'Diogo Batista Fontes', 'Anna Julia Pinheiro Silva', 'Bryan Rodrigues'] },

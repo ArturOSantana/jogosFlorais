@@ -9,8 +9,8 @@ h1,h2,.big{font-family:'Big Shoulders Display',Impact,sans-serif;font-weight:900
 h1{font-size:clamp(46px,15vw,84px);line-height:.9;margin:10px 0 2px}
 h2{font-size:30px;margin:18px 0 8px}
 .mute{color:var(--mute);margin:0 0 12px}
-.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:#0e0c12;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
-.tabs.readonly{grid-template-columns:1fr}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:#0e0c12;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+.tabs.readonly{grid-template-columns:repeat(2,1fr)}
 .tabs button{background:none;border:0;color:var(--mute);font:800 14px Figtree;padding:15px 0 13px}
 .tabs .on{color:var(--gold);box-shadow:inset 0 3px var(--gold)}
 button,input,select,textarea{font:inherit}
@@ -57,6 +57,18 @@ summary img{width:42px;height:42px;border-radius:50%;object-fit:cover;object-pos
 .names li{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px dotted var(--line)}
 .row{display:flex;gap:8px;margin-top:10px}.row .btn{width:auto;margin:0;padding:0 16px}
 .note{border-left:4px solid var(--gold);padding:4px 12px;margin:10px 0;color:var(--mute);font-size:14px}
+.ig-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
+.ig-link{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 6px;border:1px solid var(--c);border-radius:6px;color:var(--ink);font-size:13px;text-align:center;text-decoration:none}
+.ig-link strong{color:var(--c);font-size:12px}
+.team-ig,.doc-link{color:var(--gold);font-weight:800}
+.documents{margin:24px 0 90px}
+.documents h3{font-size:18px;margin:20px 0 6px}
+.team-editor{padding:0 0 14px}
+.team-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.team-editor h3{font-size:18px;margin:18px 0 4px}
+.team-editor .names li{gap:8px}
+.team-editor .names input{min-width:0;padding:8px}
+.team-editor .row input{min-width:0}
 dialog{background:var(--bg);color:var(--ink);border:1px solid var(--gold);border-radius:6px;width:min(92vw,360px)}
 dialog::backdrop{background:#000a}
 #toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:4px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
