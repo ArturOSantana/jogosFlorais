@@ -11,13 +11,18 @@ Placar em tempo real das três equipes. Positivo soma, negativo remove; a posiç
 
 Visitantes veem o placar, os links do Instagram das equipes, o regulamento em PDF e os integrantes das equipes. Administradores podem alterar os nomes dos líderes, vice-líderes e integrantes na aba **Equipes**. A lista de boa-fé não é publicada no site; quando a lista preenchida estiver disponível, os dados poderão ser organizados e atualizados nas equipes.
 
-Todos os administradores autorizados podem entrar simultaneamente com seus próprios e-mails e senhas, e as alterações recebidas pelo Firestore aparecem em tempo real. Administradores podem pausar e retomar a atualização do placar para leitores; durante a pausa, os administradores continuam vendo a pontuação ao vivo. Administradores também podem apagar atas e lançamentos de katricos; a exclusão pede confirmação. Para evitar sobrescritas, não editem a mesma ata ou equipe ao mesmo tempo: o salvamento desses documentos substitui o documento inteiro, então a última gravação prevalece. Ajustes são registrados como lançamentos separados.
+Todos os administradores autorizados podem entrar simultaneamente com seus próprios e-mails e senhas, e as alterações recebidas pelo Firestore aparecem em tempo real. Na aba **Atas**, administradores podem criar modalidades personalizadas com nome e critérios próprios; elas ficam disponíveis para todos os administradores. Administradores podem pausar e retomar a atualização do placar para leitores; durante a pausa, os administradores continuam vendo a pontuação ao vivo. Administradores também podem apagar atas e lançamentos de katricos; a exclusão pede confirmação. Para evitar sobrescritas, não editem a mesma ata ou equipe ao mesmo tempo: o salvamento desses documentos substitui o documento inteiro, então a última gravação prevalece. Ajustes são registrados como lançamentos separados.
+
+## Mega Senha
+Na aba **Mega Senha**, administradores podem cadastrar e editar listas, escolher equipe e pessoa que dará as dicas, configurar tempo, pontos, penalidade e limite de pulos. **Preparar rodada** anuncia a próxima equipe; **Iniciar** faz a contagem regressiva 3, 2, 1. Os controles permitem pausar/retomar, acertar, pular, errar, ajustar o tempo em 10 segundos e encerrar. A pausa esconde a palavra no telão. Palavras usadas não são sorteadas novamente até serem redefinidas na lista. O histórico de partidas permite apagar rodadas individualmente, após confirmação.
+
+Abra **Abrir telão** ou acesse `/megasenha/telao` em outro dispositivo. Essa página é somente leitura, atualiza em tempo real pelo Firestore e mostra a palavra em letras grandes, cronômetro, equipe, pessoa das dicas e placar; pode ser usada em tela cheia (F11). O estado e o relógio da rodada são persistidos, então recarregar o telão não reinicia o tempo. Depois de atualizar `firestore.rules`, publique as regras no Firebase Console do mesmo `VITE_FIREBASE_PROJECT_ID`: o telão pode ler somente o documento `megasenha/state`, não pode listar a coleção, e apenas administradores autorizados podem escrever. Se aparecer "Missing or insufficient permissions", confirme o projeto e publique as regras; depois clique em **Tentar novamente**. Sem Firebase, admin e telão funcionam apenas no mesmo navegador usando localStorage.
 
 ## 2. Rodar
 ```
 npm install
 npm run dev     # sem .env preenchido roda em modo local (localStorage)
-npm test        # testa soma, remoção e posição
+npm test        # testa placar, autenticação e regras do Mega Senha
 ```
 
 ## 3. Vercel

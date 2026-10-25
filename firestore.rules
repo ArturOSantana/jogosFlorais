@@ -16,6 +16,15 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if admin();
     }
+    match /modalidades/{id} {
+      allow read: if true;
+      allow write: if admin();
+    }
+    match /megasenha/{id} {
+      allow get: if id == 'state';
+      allow list: if false;
+      allow write: if id == 'state' && admin();
+    }
     match /equipes/{id} { allow read: if true; allow write: if admin(); }
     match /config/{id}  { allow read: if true; allow write: if admin(); }
   }
