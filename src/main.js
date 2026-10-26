@@ -2,11 +2,12 @@ import './style.css';
 import { TEAMS, R0, G, M, idOf, judgeKey } from './data.js';
 import { totals, ranking, ataTotal, activityTotal, ajusteTotal, sum, r2, scoreSource } from './scoring.js';
 import { DEFAULT_MEGA, normalizeMega, remainingMs, countdownPlayingMs, recordOutcome, finishRound, prepareRound, markCurrentWordUsed, deleteRound } from './megasenha.js';
+import { auditCsv, buildAuditRows, filterAuditRows } from './audit.js';
 import * as st from './store.js';
 
 const ids = TEAMS.map(t => t.id), T = Object.fromEntries(TEAMS.map(t => [t.id, t]));
 const projectorMode = location.pathname.replace(/\/+$/, '') === '/megasenha/telao';
-let S = { atas: {}, avaliacoes: {}, aj: [], eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !st.cloud, dataLoaded: !st.cloud, placar: { paused: false, snapshot: null, loaded: !st.cloud } }, tab = 'placar', admin = false, localJudgeName = '', K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false, ataDraft = { n: '', c: [''] };
+let S = { atas: {}, avaliacoes: {}, aj: [], audit: [], auditLoaded: !st.cloud, auditError: null, eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !st.cloud, dataLoaded: !st.cloud, placar: { paused: false, snapshot: null, loaded: !st.cloud } }, tab = 'placar', admin = false, localJudgeName = '', K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false, ataDraft = { n: '', c: [''] }, auditFilters = { team: '', source: '', search: '', from: '', to: '' };
 let MD = { teamId: 'pp', listId: '', clueGiver: '', durationSeconds: null, pointsPerCorrect: null, penalty: null, skipLimit: null, newListName: '', newListWords: '' }, timerEndedRoundId = '', timerStartedRoundId = '', timerSecond = -1, projectorError = null, stopProjectorWatch;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -52,6 +53,54 @@ function vKat() {
 <label for=km>Motivo</label><input id=km value="${esc(K.m)}" data-i=m>
 <button class=btn data-a=launch ${admin && v ? '' : 'disabled'}>${lbl}</button>
 <h2>Histórico</h2>${hist(80, true)}`;
+}
+const auditActivities = () => [...M, ...S.customAtas];
+const auditData = () => buildAuditRows({
+  events: S.audit || [],
+  atas: S.atas,
+  avaliacoes: S.avaliacoes,
+  adjustments: S.aj,
+  activities: auditActivities(),
+  teams: TEAMS,
+});
+const auditRowsForView = () => filterAuditRows(auditData(), auditFilters);
+const auditActionName = action => ({
+  save: 'Avaliação salva',
+  delete: 'Registro excluído',
+  baseline: 'Posição inicial',
+  create: 'Lançamento criado',
+}[action] || action || 'Registro');
+const auditTable = rows => `<table class="audit-table"><thead><tr><th>Data / ação</th><th>Origem</th><th>Modalidade</th><th>Critério</th><th>Equipe</th><th>Juiz</th><th>Antes</th><th>Depois</th><th>Variação</th><th>Motivo / observação</th><th>Responsável</th><th>ID</th></tr></thead><tbody>${rows.map(row => `<tr>
+<td>${row.ts ? new Date(row.ts).toLocaleString('pt-BR') : '—'}<br><small>${esc(auditActionName(row.action))}</small></td>
+<td>${esc(row.source)}</td><td>${esc(row.activity)}</td><td>${esc(row.criterion)}</td><td style="color:var(--${row.teamId})">${esc(row.team)}</td><td>${esc(row.judge || '—')}</td>
+<td>${row.before ?? '—'}</td><td>${row.after ?? '—'}</td><td>${sgn(row.delta)}</td><td>${esc(row.motive || '—')}</td><td>${esc(row.actor || '—')}</td><td><code title="${esc(row.recordId)}">${esc(row.recordId || '—')}</code></td></tr>`).join('')}</tbody></table>`;
+function vAudit() {
+  if (!admin) return '<h2>Acesso restrito</h2>';
+  if (S.auditError) return `<h2>Auditoria de pontos</h2><p class=note role=alert>Não foi possível carregar a auditoria: ${esc(S.auditError)}. Verifique a regra Firestore da coleção auditoriaPontos e tente novamente.</p>`;
+  if (!S.auditLoaded) return '<h2>Auditoria de pontos</h2><p class=mute role=status>Carregando os registros de auditoria...</p>';
+  const rows = auditRowsForView(), allRows = auditData(), displayed = rows.slice(0, 1000);
+  const currentTotal = totals(ids, S.atas, S.aj, S.avaliacoes);
+  const sourceTotals = ids.map(team => ({
+    team,
+    ata: ataTotal(S.atas, team, S.avaliacoes),
+    adjustments: ajusteTotal(S.aj, team),
+    total: currentTotal[team],
+  }));
+  const summaryTable = `<div class=tw><table class=comp><thead><tr><th>Equipe</th><th>Atas</th><th>Ajustes</th><th>Total atual</th></tr></thead><tbody>${sourceTotals.map(item => `<tr><th style="color:var(--${item.team})">${T[item.team].s}</th><td>${item.ata}</td><td>${sgn(item.adjustments)}</td><td><b>${item.total}</b></td></tr>`).join('')}</tbody></table></div>`;
+  return `<h2>Auditoria de pontos</h2>
+${summaryTable}
+<form class=audit-filters id=audit-filter>
+<label>Equipe<select name=team><option value="">Todas as equipes</option>${TEAMS.map(team => `<option value="${team.id}" ${auditFilters.team === team.id ? 'selected' : ''}>${team.s}</option>`).join('')}</select></label>
+<label>Origem<select name=source><option value="">Todas as origens</option><option value="Ata" ${auditFilters.source === 'Ata' ? 'selected' : ''}>Atas</option><option value="Ajuste" ${auditFilters.source === 'Ajuste' ? 'selected' : ''}>Ajustes de katricos</option></select></label>
+<label>Buscar<input name=search type=search value="${esc(auditFilters.search)}" placeholder="Modalidade, critério, juiz, motivo..."></label>
+<label>De<input name=from type=date value="${esc(auditFilters.from)}"></label><label>Até<input name=to type=date value="${esc(auditFilters.to)}"></label>
+<button class=btn type=submit>Aplicar filtros</button></form>
+<p class=mute>${rows.length} itens encontrados · ${allRows.length} itens no histórico completo.</p>
+<div class=audit-exports><button class=btn data-a=exportAudit>Baixar CSV para Excel</button><button class=btn data-a=printAudit>Imprimir / salvar como PDF</button></div>
+${rows.length ? `<div class=tw>${auditTable(displayed)}</div>${rows.length > displayed.length ? `<p class=note>Exibindo os 1.000 itens mais recentes. Use filtros para consultar e exportar o conjunto completo.</p>` : ''}` : '<p class=mute>Nenhum registro corresponde aos filtros.</p>'}
+<section id=audit-print class=audit-print><header><h1>Auditoria de pontos</h1><p>Jogos Florais 2026 · Emitido em ${new Date().toLocaleString('pt-BR')}</p><p>Filtros: equipe ${auditFilters.team ? T[auditFilters.team].s : 'todas'} · origem ${auditFilters.source || 'todas'} · busca ${esc(auditFilters.search || '—')} · período ${auditFilters.from || 'início'} a ${auditFilters.to || 'hoje'}</p></header>
+<h2>Resumo atual</h2>${summaryTable}
+<div class=tw>${auditTable(rows)}</div><footer>${rows.length} itens no relatório</footer></section>`;
 }
 function vAta() {
   const activities = [...M, ...S.customAtas], m = activities.find(x => x.id === A) || activities[0], legacy = S.atas[m.id], evals = Object.values(S.avaliacoes || {}).filter(x => x.activityId === m.id), ownId = localJudgeName ? judgeKey(localJudgeName) : '', d = evals.find(x => x.juizId === ownId) || (legacy?.juiz && judgeKey(legacy.juiz) === ownId ? legacy : {}), s = d.s || {};
@@ -177,13 +226,14 @@ function render() {
   if (projectorMode) { vMegaProjector(); return; }
   if (st.cloud && !admin && !['placar', 'info'].includes(tab)) tab = 'placar';
   if (st.cloud && admin && tab === 'info') tab = 'placar';
-  const tabs = [['placar', 'Placar'], ['info', 'Informações'], ['kat', 'Katricos'], ['ata', 'Atas'], ['eq', 'Equipes'], ['mega', 'Mega Senha']];
+  const tabs = [['placar', 'Placar'], ['info', 'Informações'], ['kat', 'Katricos'], ['ata', 'Atas'], ['eq', 'Equipes'], ['mega', 'Mega Senha'], ['audit', 'Auditoria']];
   const visibleTabs = st.cloud && admin ? tabs.filter(([k]) => k !== 'info') : admin || !st.cloud ? tabs : tabs.slice(0, 2);
   $('#tabs').innerHTML = visibleTabs.map(([k, n]) => `<button class="${tab === k ? 'on' : ''}" data-a=tab data-id=${k}>${n}</button>`).join('');
+  $('#tabs').style.gridTemplateColumns = `repeat(${visibleTabs.length}, 1fr)`;
   $('#tabs').classList.toggle('readonly', st.cloud && !admin);
   $('#who').textContent = !st.cloud ? 'Modo local' : admin ? 'Sair' : 'Entrar';
   const note = !st.cloud ? '<p class=note>Firebase não configurado: os dados ficam só neste aparelho.</p>' : '';
-  $('#app').innerHTML = note + { placar: vPlacar, info: vInfo, kat: vKat, ata: vAta, eq: vEq, mega: vMega }[tab]();
+  $('#app').innerHTML = note + { placar: vPlacar, info: vInfo, kat: vKat, ata: vAta, eq: vEq, mega: vMega, audit: vAudit }[tab]();
 }
 const refresh = () => { if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { pend = true; return; } render(); };
 document.addEventListener('focusout', () => { if (pend) { pend = false; setTimeout(refresh, 60); } });
@@ -207,7 +257,8 @@ const act = {
   del: d => { if (admin && confirm('Apagar este lançamento de katricos?')) guard(st.delAj(d.id)); },
   delAta: d => {
     if (!admin || !confirm('Apagar todas as avaliações desta modalidade? Esta ação não pode ser desfeita.')) return;
-    guard(st.delAta(d.id)).then(saved => {
+    const activity = auditActivities().find(item => item.id === d.id);
+    guard(st.delAta(d.id, activity?.n || d.id, activity?.c || [])).then(saved => {
       if (saved) {
         if (A === d.id) A = M[0].id;
         render();
@@ -361,8 +412,31 @@ const act = {
     if (judgeId !== judgeKey(localJudgeName)) { toast('Clique em “Abrir avaliação” antes de salvar.'); return; }
     const s = { pp: [], sl: [], gg: [] };
     document.querySelectorAll('input[data-t]').forEach(i => s[i.dataset.t].push(+i.value || 0));
-    guard(st.saveAvaliacao(A, judgeId, { s, juiz, obs: $('#obs').value.trim(), ts: Date.now() }));
+    const activity = auditActivities().find(item => item.id === A) || M[0];
+    const current = Object.values(S.avaliacoes).find(item => item.activityId === A && item.juizId === judgeId);
+    const legacy = S.atas[A];
+    const legacyMatches = !current && legacy?.juiz && judgeKey(legacy.juiz) === judgeId;
+    const previous = current || (legacyMatches ? legacy : null);
+    guard(st.saveAvaliacao(A, judgeId, { s, juiz, obs: $('#obs').value.trim(), ts: Date.now() }, {
+      activityName: activity.n,
+      criteria: activity.c,
+      juiz,
+      obs: $('#obs').value.trim(),
+      before: previous?.s || null,
+      after: s,
+      replacesSourceId: legacyMatches ? `ata:${A}` : '',
+    }));
   },
+  exportAudit: () => {
+    if (!admin || !S.auditLoaded) return;
+    const blob = new Blob([auditCsv(auditRowsForView())], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url;
+    link.download = `auditoria-pontos-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  printAudit: () => { if (admin && S.auditLoaded) window.print(); },
   addCriterion: () => { ataDraft.c.push(''); render(); },
   removeCriterion: d => { if (ataDraft.c.length > 1) ataDraft.c.splice(+d.n, 1); render(); },
   saveCustomAta: () => {
@@ -400,6 +474,13 @@ function subscribeProjector() {
   });
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { e.preventDefault(); const k = b.closest('details')?.open; act[b.dataset.a]?.(b.dataset); if (k && tab === 'eq') document.querySelectorAll('details').forEach(x => x.open = x.contains(b)); } });
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'audit-filter') return;
+  e.preventDefault();
+  const form = e.target;
+  auditFilters = Object.fromEntries(['team', 'source', 'search', 'from', 'to'].map(key => [key, form.elements.namedItem(key).value]));
+  render();
+});
 document.addEventListener('input', e => {
   const i = e.target.dataset.i;
   if (i === 'v') K.v = +e.target.value; if (i === 'm') K.m = e.target.value;
