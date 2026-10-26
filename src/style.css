@@ -60,6 +60,14 @@ input,select,textarea{width:100%;background:#1f1b27;color:var(--ink);border:1px 
 .eval-list .eval-head b{min-width:0;font-size:20px;overflow-wrap:anywhere}
 .eval-list .eval-head time{flex:0 0 auto;text-align:right}
 .eval-list p{margin:3px 0 0;overflow-wrap:anywhere}
+.modality-result{margin:18px 0;padding:12px;border:1px solid var(--gold);border-radius:6px}
+.modality-result h3{margin:0 0 6px;color:var(--gold)}
+.modality-winner{margin:4px 0 12px}
+.modality-winner b{color:var(--gold)}
+.modality-ranking{width:100%;border-collapse:collapse;margin:8px 0}
+.modality-ranking th,.modality-ranking td{padding:7px 5px;text-align:left;border-bottom:1px solid var(--line)}
+.modality-ranking th:last-child,.modality-ranking td:last-child{text-align:right}
+.modality-result>.mute{font-size:13px;margin:8px 0 0}
 .x{background:none;border:0;padding:4px 6px;font-size:17px}
 .tw{overflow-x:auto}
 .ata{width:100%;border-collapse:collapse}

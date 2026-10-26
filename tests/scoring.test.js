@@ -30,7 +30,9 @@ test('mostra o total de modalidade com avaliações mesmo sem documento legado',
     x__um: { activityId: 'x', s: { pp: [19.5], sl: [14.5], gg: [29.5] } },
     x__dois: { activityId: 'x', s: { pp: [2], sl: [3], gg: [1] } },
   };
-  assert.deepEqual(ids.map(t => activityTotal('x', undefined, avaliacoes, t)), [21.5, 17.5, 30.5]);
+  const scores = Object.fromEntries(ids.map(team => [team, activityTotal('x', undefined, avaliacoes, team)]));
+  assert.deepEqual(scores, { pp: 21.5, sl: 17.5, gg: 30.5 });
+  assert.deepEqual(ranking(ids, scores).filter(team => team.pos === 1).map(team => team.id), ['gg']);
 });
 test('ao continuar uma ata antiga, não conta duas vezes a avaliação do mesmo juiz', () => {
   const atas = { x: { juiz: 'Juiz Um', s: { pp: [3], sl: [2], gg: [1] } } };
