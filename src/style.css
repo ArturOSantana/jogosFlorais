@@ -43,6 +43,11 @@ input,select,textarea{width:100%;background:#1f1b27;color:var(--ink);border:1px 
 .hist li{display:grid;grid-template-columns:48px 1fr auto auto;gap:8px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line)}
 .hist b{font:900 24px 'Big Shoulders Display'}
 .hist time,.x{color:var(--mute);font-size:13px}
+.eval-list li{display:block;padding:10px 0}
+.eval-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;min-width:0}
+.eval-list .eval-head b{min-width:0;font-size:20px;overflow-wrap:anywhere}
+.eval-list .eval-head time{flex:0 0 auto;text-align:right}
+.eval-list p{margin:3px 0 0;overflow-wrap:anywhere}
 .x{background:none;border:0;padding:4px 6px;font-size:17px}
 .tw{overflow-x:auto}
 .ata{width:100%;border-collapse:collapse}

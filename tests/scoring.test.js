@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { totals, ranking, sum, scoreSource } from '../src/scoring.js';
+import { totals, ranking, sum, scoreSource, activityTotal } from '../src/scoring.js';
 const ids = ['pp', 'sl', 'gg'];
 test('positivo soma e negativo remove', () => {
   const aj = [{ t: 'sl', v: 5 }, { t: 'sl', v: -3 }, { t: 'gg', v: 10 }];
@@ -24,6 +24,13 @@ test('soma as avaliações de todos os juízes sem misturar modalidades', () => 
     y__juiz1: { activityId: 'y', s: { pp: [5], sl: [0], gg: [1] } },
   };
   assert.deepEqual(totals(ids, atas, [], avaliacoes), { pp: 14, sl: 6, gg: 5 });
+});
+test('mostra o total de modalidade com avaliações mesmo sem documento legado', () => {
+  const avaliacoes = {
+    x__um: { activityId: 'x', s: { pp: [19.5], sl: [14.5], gg: [29.5] } },
+    x__dois: { activityId: 'x', s: { pp: [2], sl: [3], gg: [1] } },
+  };
+  assert.deepEqual(ids.map(t => activityTotal('x', undefined, avaliacoes, t)), [21.5, 17.5, 30.5]);
 });
 test('ao continuar uma ata antiga, não conta duas vezes a avaliação do mesmo juiz', () => {
   const atas = { x: { juiz: 'Juiz Um', s: { pp: [3], sl: [2], gg: [1] } } };

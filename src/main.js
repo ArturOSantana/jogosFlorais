@@ -62,7 +62,7 @@ function vAta() {
   const dis = admin ? '' : 'disabled', head = `<th></th>${TEAMS.map(t => `<th style="color:var(--${t.id})">${t.s}</th>`).join('')}`;
   const legacyAlreadyMigrated = legacy?.juiz && evals.some(a => a.juizId === judgeKey(legacy.juiz));
   const allEvals = [...(legacy && !legacyAlreadyMigrated ? [{ juiz: legacy.juiz || 'Registro anterior', obs: legacy.obs, s: legacy.s, ts: legacy.ts }] : []), ...evals];
-  const score = team => activityTotal(legacy ? { ...legacy, id: m.id } : null, S.avaliacoes, team);
+  const score = team => activityTotal(m.id, legacy, S.avaliacoes, team);
   return `<h2>Ata dos juízes</h2><p class=mute>${done.length} de ${activities.length} modalidades com avaliações registradas.</p>
 <label for=am>Modalidade</label><select id=am data-c=ata>${opts}</select>
 <div class=judge-picker>
@@ -74,13 +74,13 @@ ${ownId ? `<p class=judge-status role=status>Avaliando: ${esc(localJudgeName)}</
 <tfoot><tr><th scope=row>Total</th>${ids.map(t => `<td id=tt-${t}>${sum(s[t])}</td>`).join('')}</tr></tfoot></table></div>
 <label for=obs>Observações</label><textarea id=obs rows=3 ${dis}>${esc(d.obs)}</textarea>
 <button class=btn data-a=saveAta ${dis}>Salvar avaliação</button>
-${allEvals.length ? `<h3>Avaliações desta modalidade</h3><ul class=hist>${allEvals.map(a => `<li><b>${esc(a.juiz || 'Juiz')}</b><span>${ids.map(t => `${T[t].s}: ${sum(a.s?.[t])}`).join(' · ')}${a.obs ? ` · ${esc(a.obs)}` : ''}</span><time>${a.ts ? new Date(a.ts).toLocaleString('pt-BR') : ''}</time><span></span></li>`).join('')}</ul>` : '<p class=mute>Nenhuma avaliação registrada para esta modalidade.</p>'}
+${allEvals.length ? `<h3>Avaliações desta modalidade</h3><ul class="hist eval-list">${allEvals.map(a => `<li><div class=eval-head><b>${esc(a.juiz || 'Juiz')}</b>${a.ts ? `<time>${new Date(a.ts).toLocaleString('pt-BR')}</time>` : ''}</div><p>${ids.map(t => `${T[t].s}: ${sum(a.s?.[t])}`).join(' · ')}${a.obs ? ` · ${esc(a.obs)}` : ''}</p></li>`).join('')}</ul>` : '<p class=mute>Nenhuma avaliação registrada para esta modalidade.</p>'}
 <p><b>Total somado no placar:</b> ${ids.map(t => `${T[t].s}: ${score(t)}`).join(' · ')}</p>
 ${admin ? `<section class=custom-ata><h2>Adicionar ata</h2><p class=mute>Crie uma modalidade com os critérios que serão pontuados para cada equipe.</p>
 <label for=custom-name>Nome da ata</label><input id=custom-name maxlength=100 data-draft-name value="${esc(ataDraft.n)}">
 <h3>Critérios</h3>${ataDraft.c.map((c, i) => `<div class=row><input maxlength=120 aria-label="Critério ${i + 1}" data-draft-criterion="${i}" value="${esc(c)}" placeholder="Nome do critério">${ataDraft.c.length > 1 ? `<button class=x data-a=removeCriterion data-n="${i}" aria-label="Remover critério ${i + 1}">✕</button>` : ''}</div>`).join('')}
 <button class=btn data-a=addCriterion>Adicionar critério</button><button class=btn data-a=saveCustomAta>Salvar nova ata</button></section>` : ''}
-<h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const old = S.atas[x.id], v = ids.map(t => activityTotal(old ? { ...old, id: x.id } : null, S.avaliacoes, t)), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${esc(x.n)}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar avaliações de ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
+<h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const old = S.atas[x.id], v = ids.map(t => activityTotal(x.id, old, S.avaliacoes, t)), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${esc(x.n)}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar avaliações de ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
 }
 function vEq() {
   return `<h2>Equipes</h2><p class=mute>Consulte os integrantes e, como administrador, altere os nomes e cargos quando necessário.</p>${TEAMS.map(t => { const e = eq(t.id), count = e.m.filter(Boolean).length + Number(Boolean(e.l)) + Number(Boolean(e.v)); return `<details data-team=${t.id} ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt=""><span>${t.n}<br><small class=mute>${count} integrantes</small></span></summary>
@@ -358,7 +358,7 @@ const act = {
     if (!admin) return;
     const juiz = $('#juiz').value.trim(), judgeId = judgeKey(juiz);
     if (!juiz || !judgeId) { toast('Informe o nome do juiz antes de salvar.'); return; }
-    if (judgeId !== judgeKey(localJudgeName)) { toast('Clique em “Carregar avaliação” para abrir ou iniciar as notas deste juiz.'); return; }
+    if (judgeId !== judgeKey(localJudgeName)) { toast('Clique em “Abrir avaliação” antes de salvar.'); return; }
     const s = { pp: [], sl: [], gg: [] };
     document.querySelectorAll('input[data-t]').forEach(i => s[i.dataset.t].push(+i.value || 0));
     guard(st.saveAvaliacao(A, judgeId, { s, juiz, obs: $('#obs').value.trim(), ts: Date.now() }));
