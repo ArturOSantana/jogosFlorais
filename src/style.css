@@ -50,6 +50,11 @@ input,select,textarea{width:100%;background:#1f1b27;color:var(--ink);border:1px 
 .ata th[scope=row]{text-align:left;font-weight:600;width:34%}
 .ata td input{padding:8px 2px;text-align:center;width:100%;min-width:0}
 .ata tfoot td,.ata tfoot th{font:900 24px 'Big Shoulders Display';border-top:2px solid var(--ink);border-bottom:0}
+.judge-picker{margin-top:12px}
+.judge-picker label{margin-top:0}
+.judge-picker-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.judge-picker-row .btn{width:auto;margin:0;padding:11px 16px;white-space:nowrap}
+.judge-status{color:var(--gold);font-size:14px;margin:6px 0 0}
 details{border-top:1px solid var(--line);padding:12px 0}
 summary{display:flex;align-items:center;gap:12px;font-weight:800;cursor:pointer;list-style:none}
 summary img{width:42px;height:42px;border-radius:50%;object-fit:cover;object-position:50% 14%;border:2px solid var(--c)}

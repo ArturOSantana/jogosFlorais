@@ -16,6 +16,16 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if admin();
     }
+    match /avaliacoes/{id} {
+      allow read: if true;
+      allow create: if admin()
+        && id == request.resource.data.activityId + '__' + request.resource.data.juizId;
+      allow update: if admin()
+        && id == request.resource.data.activityId + '__' + request.resource.data.juizId
+        && resource.data.juizId == request.resource.data.juizId
+        && resource.data.activityId == request.resource.data.activityId;
+      allow delete: if admin();
+    }
     match /modalidades/{id} {
       allow read: if true;
       allow write: if admin();

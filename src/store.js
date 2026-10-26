@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, serverTimestamp, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { resolveAdminEmail } from './auth.js';
 import { DEFAULT_MEGA, startRoundClock } from './megasenha.js';
@@ -17,13 +17,14 @@ let db, auth;
 if (cloud) { const app = initializeApp(cfg); db = getFirestore(app); auth = getAuth(app); }
 
 // Sem .env preenchido o site roda em modo local (localStorage), só para testar.
-const S = { atas: {}, aj: [], eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !cloud, dataLoaded: !cloud, placar: { paused: false, snapshot: null, loaded: !cloud } };
+const S = { atas: {}, avaliacoes: {}, aj: [], eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !cloud, dataLoaded: !cloud, placar: { paused: false, snapshot: null, loaded: !cloud } };
 const KEY = 'katricos-local';
 let emit = () => {};
 let stopMegaWatch;
 if (!cloud) {
   try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); }
   catch (err) { console.error('Não foi possível carregar os dados locais.', err); }
+  S.avaliacoes ||= {};
 }
 const persist = update => Promise.resolve().then(() => {
   const next = update(S);
@@ -39,10 +40,11 @@ export function watch(cb) {
   const sub = (name, fn) => onSnapshot(collection(db, name), s => {
     fn(s.docs);
     ready.add(name);
-    S.dataLoaded = ready.size === 4;
+    S.dataLoaded = ready.size === 5;
     cb(S);
   }, err => console.error(name, err));
   sub('atas', d => { S.atas = {}; d.forEach(x => (S.atas[x.id] = x.data())); });
+  sub('avaliacoes', d => { S.avaliacoes = {}; d.forEach(x => (S.avaliacoes[x.id] = { id: x.id, ...x.data() })); });
   sub('ajustes', d => { S.aj = d.map(x => ({ id: x.id, ...x.data() })).sort((a, b) => b.ts - a.ts); });
   sub('equipes', d => { S.eq = {}; d.forEach(x => (S.eq[x.id] = x.data())); });
   sub('modalidades', d => { S.customAtas = d.map(x => ({ id: x.id, ...x.data() })); });
@@ -78,27 +80,41 @@ export const onAdmin = cb => (cloud ? onAuthStateChanged(auth, u => {
     S.megaLoaded = false;
     emit(S);
   }
-}) : cb(true));
+}) : cb(true, null));
 export const login = (username, pass) => {
   const email = resolveAdminEmail(username, adminEmails, ['terezinha.santa', configuredAdminUsername]);
   if (!email || !adminEmails.includes(email)) return Promise.reject(new Error('admin-config'));
   return signInWithEmailAndPassword(auth, email, pass);
 };
 export const logout = () => signOut(auth);
-export const saveAta = (id, o) => (cloud ? setDoc(doc(db, 'atas', id), o) : persist(s => ({ ...s, atas: { ...s.atas, [id]: o } })));
+export const avaliacaoId = (activityId, judgeId) => `${activityId}__${judgeId}`;
+export const saveAvaliacao = (activityId, judgeId, o) => {
+  const id = avaliacaoId(activityId, judgeId), data = { ...o, activityId, juizId: judgeId };
+  return cloud
+    ? setDoc(doc(db, 'avaliacoes', id), data)
+    : persist(s => ({ ...s, avaliacoes: { ...s.avaliacoes, [id]: { id, ...data } } }));
+};
 export const saveCustomAta = (id, o) => (cloud
   ? setDoc(doc(db, 'modalidades', id), o).then(() => {
     S.customAtas = [...S.customAtas.filter(a => a.id !== id), { id, ...o }];
     emit(S);
   })
   : persist(s => ({ ...s, customAtas: [...s.customAtas.filter(a => a.id !== id), { id, ...o }] })));
-export const delAta = id => (cloud ? deleteDoc(doc(db, 'atas', id)) : persist(s => {
-  const atas = { ...s.atas };
-  delete atas[id];
-  return { ...s, atas };
-}));
+export const delAta = id => (cloud
+  ? getDocs(query(collection(db, 'avaliacoes'), where('activityId', '==', id))).then(snapshot => {
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(x => batch.delete(x.ref));
+    batch.delete(doc(db, 'atas', id));
+    return batch.commit();
+  })
+  : persist(s => {
+    const atas = { ...s.atas }, avaliacoes = { ...s.avaliacoes };
+    delete atas[id];
+    Object.keys(avaliacoes).forEach(key => { if (avaliacoes[key].activityId === id) delete avaliacoes[key]; });
+    return { ...s, atas, avaliacoes };
+  }));
 export const setPlacarPaused = paused => {
-  const snapshot = paused ? { atas: S.atas, aj: S.aj, ts: Date.now() } : null;
+  const snapshot = paused ? { atas: S.atas, avaliacoes: S.avaliacoes, aj: S.aj, ts: Date.now() } : null;
   return cloud
     ? setDoc(doc(db, 'config', 'placar'), { paused, snapshot })
     : persist(s => ({ ...s, placar: { paused, snapshot, loaded: true } }));

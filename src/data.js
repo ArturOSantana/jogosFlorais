@@ -21,4 +21,5 @@ export const G = [
   ['Esportivas', [['Futebol', PL(3)], ['Vôlei', PL(3)], ['Queimada', PL(3)], ['Atletismo', ['Melhores resultados', 'Cabo de guerra', 'Revezamento 4x4', '100m rasos', 'Lançamento de dardo', 'Lançamento de peso', 'Salto em distância']]]],
 ];
 export const idOf = n => n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-|-$/g, '');
+export const judgeKey = n => encodeURIComponent(String(n ?? '').trim().toLocaleLowerCase('pt-BR'));
 export const M = G.flatMap(([, l]) => l.map(([n, c]) => ({ id: idOf(n), n, c })));

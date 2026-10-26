@@ -1,9 +1,22 @@
+import { judgeKey } from './data.js';
+
 // Regra única do placar: total = soma das atas + soma dos ajustes (positivos somam, negativos removem).
 export const r2 = n => Math.round((+n || 0) * 100) / 100;
 export const sum = a => r2((a || []).reduce((x, y) => x + (+y || 0), 0));
-export const ataTotal = (atas, t) => r2(Object.values(atas).reduce((x, a) => x + sum(a.s?.[t]), 0));
+export const activityTotal = (ata, avaliacoes, t) => {
+  const legacyStillCounts = !ata?.juiz || !Object.values(avaliacoes || {}).some(a =>
+    a.activityId === ata.id && a.juizId === judgeKey(ata.juiz));
+  return r2(
+    (legacyStillCounts ? sum(ata?.s?.[t]) : 0)
+    + Object.values(avaliacoes || {}).reduce((x, a) => x + (a.activityId === ata?.id ? sum(a.s?.[t]) : 0), 0),
+  );
+};
+export const ataTotal = (atas, t, avaliacoes = {}) => r2(
+  Object.entries(atas).reduce((x, [id, a]) => x + activityTotal({ ...a, id }, avaliacoes, t), 0)
+  + Object.values(avaliacoes).reduce((x, a) => x + (!atas[a.activityId] ? sum(a.s?.[t]) : 0), 0),
+);
 export const ajusteTotal = (aj, t) => r2(aj.filter(a => a.t === t).reduce((x, a) => x + (+a.v || 0), 0));
-export const totals = (ids, atas, aj) => Object.fromEntries(ids.map(t => [t, r2(ataTotal(atas, t) + ajusteTotal(aj, t))]));
+export const totals = (ids, atas, aj, avaliacoes = {}) => Object.fromEntries(ids.map(t => [t, r2(ataTotal(atas, t, avaliacoes) + ajusteTotal(aj, t))]));
 export const scoreSource = (state, isAdmin, cloud) => {
   if (!cloud || isAdmin) return state;
   if (!state.dataLoaded || !state.placar?.loaded) return null;

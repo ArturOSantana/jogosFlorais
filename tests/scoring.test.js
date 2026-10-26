@@ -16,6 +16,23 @@ test('atas e ajustes se combinam', () => {
   const atas = { x: { s: { pp: [3, 4.5], sl: [2, 2], gg: [0, 1] } }, y: { s: { pp: [1], sl: [5], gg: [5] } } };
   assert.deepEqual(totals(ids, atas, [{ t: 'gg', v: -2 }]), { pp: 8.5, sl: 9, gg: 4 });
 });
+test('soma as avaliações de todos os juízes sem misturar modalidades', () => {
+  const atas = { x: { s: { pp: [3], sl: [2], gg: [1] } } };
+  const avaliacoes = {
+    x__juiz1: { activityId: 'x', s: { pp: [4], sl: [1], gg: [2] } },
+    x__juiz2: { activityId: 'x', s: { pp: [2], sl: [3], gg: [1] } },
+    y__juiz1: { activityId: 'y', s: { pp: [5], sl: [0], gg: [1] } },
+  };
+  assert.deepEqual(totals(ids, atas, [], avaliacoes), { pp: 14, sl: 6, gg: 5 });
+});
+test('ao continuar uma ata antiga, não conta duas vezes a avaliação do mesmo juiz', () => {
+  const atas = { x: { juiz: 'Juiz Um', s: { pp: [3], sl: [2], gg: [1] } } };
+  const avaliacoes = {
+    x__juiz: { activityId: 'x', juizId: 'juiz%20um', juiz: 'Juiz Um', s: { pp: [4], sl: [1], gg: [2] } },
+    'x__juiz-dois': { activityId: 'x', juizId: 'juiz-dois', juiz: 'Juiz Dois', s: { pp: [2], sl: [3], gg: [1] } },
+  };
+  assert.deepEqual(totals(ids, atas, [], avaliacoes), { pp: 6, sl: 4, gg: 3 });
+});
 test('sem erro de ponto flutuante', () => {
   assert.equal(sum([0.1, 0.2]), 0.3);
   assert.equal(totals(ids, {}, [{ t: 'pp', v: 0.1 }, { t: 'pp', v: 0.2 }]).pp, 0.3);

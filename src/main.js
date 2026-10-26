@@ -1,12 +1,12 @@
 import './style.css';
-import { TEAMS, R0, G, M, idOf } from './data.js';
-import { totals, ranking, ataTotal, ajusteTotal, sum, r2, scoreSource } from './scoring.js';
+import { TEAMS, R0, G, M, idOf, judgeKey } from './data.js';
+import { totals, ranking, ataTotal, activityTotal, ajusteTotal, sum, r2, scoreSource } from './scoring.js';
 import { DEFAULT_MEGA, normalizeMega, remainingMs, countdownPlayingMs, recordOutcome, finishRound, prepareRound, markCurrentWordUsed, deleteRound } from './megasenha.js';
 import * as st from './store.js';
 
 const ids = TEAMS.map(t => t.id), T = Object.fromEntries(TEAMS.map(t => [t.id, t]));
 const projectorMode = location.pathname.replace(/\/+$/, '') === '/megasenha/telao';
-let S = { atas: {}, aj: [], eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !st.cloud, dataLoaded: !st.cloud, placar: { paused: false, snapshot: null, loaded: !st.cloud } }, tab = 'placar', admin = false, K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false, ataDraft = { n: '', c: [''] };
+let S = { atas: {}, avaliacoes: {}, aj: [], eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !st.cloud, dataLoaded: !st.cloud, placar: { paused: false, snapshot: null, loaded: !st.cloud } }, tab = 'placar', admin = false, localJudgeName = '', K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false, ataDraft = { n: '', c: [''] };
 let MD = { teamId: 'pp', listId: '', clueGiver: '', durationSeconds: null, pointsPerCorrect: null, penalty: null, skipLimit: null, newListName: '', newListWords: '' }, timerEndedRoundId = '', timerStartedRoundId = '', timerSecond = -1, projectorError = null, stopProjectorWatch;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -27,13 +27,13 @@ function vPlacar() {
   const shown = scoreSource(S, admin, st.cloud);
   if (!shown) return `<h1>Katricos</h1><p class=${S.placar.loaded && S.placar.paused ? 'note' : 'mute'} role=status>${S.placar.loaded && S.placar.paused ? 'O placar está pausado pela organização.' : 'Carregando placar...'}</p>`;
   const frozen = st.cloud && !admin && S.placar.paused;
-  const tot = totals(ids, shown.atas, shown.aj), rk = ranking(ids, tot), mx = Math.max(1, ...ids.map(i => Math.abs(tot[i]))), started = Object.keys(shown.atas).length || shown.aj.length;
+  const tot = totals(ids, shown.atas, shown.aj, shown.avaliacoes), rk = ranking(ids, tot), mx = Math.max(1, ...ids.map(i => Math.abs(tot[i]))), started = Object.keys(shown.atas).length || Object.keys(shown.avaliacoes || {}).length || shown.aj.length;
   return `<div class=hero style="display:flex;align-items:center;gap:14px"><img src="/img/jogos.png" alt="" height=72><div><h1>Katricos</h1><p class=mute style="margin:0">Jogos Florais 2026</p></div></div>
 ${frozen ? `<p class=note role=status>Atualização do placar pausada pela organização.</p>` : ''}
 ${admin ? `<button class=btn data-a=togglePause ${!S.dataLoaded ? 'disabled' : ''}>${S.placar.paused ? 'Retomar atualização para leitores' : 'Pausar atualização para leitores'}</button>${!S.dataLoaded ? '<p class=mute>Aguarde o carregamento dos dados para pausar o placar.</p>' : !S.placar.paused ? '<p class=mute>Leitores acompanham a pontuação em tempo real.</p>' : ''}` : ''}
 <section class=stage><i class=rod></i><div class=banners>${TEAMS.map(t => { const p = rk.find(r => r.id === t.id); return `<article class=bn style="--c:var(--${t.id});--k:${Math.max(0, tot[t.id]) / mx}"><span class=pos>${started ? p.pos + 'º' : '–'}</span><img src="/img/${t.id}.jpg" alt="${t.n}"><div class=nm>${t.s}</div><div class=big>${r2(tot[t.id])}</div><div class=un>katricos</div></article>`; }).join('')}</div></section>
 ${admin ? `<table class=comp><thead><tr><th></th>${TEAMS.map(t => `<th style="color:var(--${t.id})">${t.s}</th>`).join('')}</tr></thead><tbody>
-<tr><th>Atas</th>${ids.map(i => `<td>${ataTotal(S.atas, i)}</td>`).join('')}</tr>
+<tr><th>Atas</th>${ids.map(i => `<td>${ataTotal(S.atas, i, S.avaliacoes)}</td>`).join('')}</tr>
 <tr><th>Ajustes</th>${ids.map(i => `<td>${sgn(ajusteTotal(S.aj, i))}</td>`).join('')}</tr></tbody></table>
 <h2>Últimos lançamentos</h2>${hist(5, false)}` : ''}
 `;
@@ -54,22 +54,33 @@ function vKat() {
 <h2>Histórico</h2>${hist(80, true)}`;
 }
 function vAta() {
-  const activities = [...M, ...S.customAtas], m = activities.find(x => x.id === A) || activities[0], d = S.atas[m.id] || {}, s = d.s || {}, done = activities.filter(x => S.atas[x.id]);
-  const opts = G.map(([g, l]) => `<optgroup label="${g}">${l.map(([n]) => `<option value="${idOf(n)}" ${idOf(n) === m.id ? 'selected' : ''}>${S.atas[idOf(n)] ? '✓ ' : ''}${n}</option>`).join('')}</optgroup>`).join('') +
-    (S.customAtas.length ? `<optgroup label="Personalizadas">${S.customAtas.map(x => `<option value="${x.id}" ${x.id === m.id ? 'selected' : ''}>${S.atas[x.id] ? '✓ ' : ''}${esc(x.n)}</option>`).join('')}</optgroup>` : '');
+  const activities = [...M, ...S.customAtas], m = activities.find(x => x.id === A) || activities[0], legacy = S.atas[m.id], evals = Object.values(S.avaliacoes || {}).filter(x => x.activityId === m.id), ownId = localJudgeName ? judgeKey(localJudgeName) : '', d = evals.find(x => x.juizId === ownId) || (legacy?.juiz && judgeKey(legacy.juiz) === ownId ? legacy : {}), s = d.s || {};
+  const done = activities.filter(x => S.atas[x.id] || Object.values(S.avaliacoes || {}).some(a => a.activityId === x.id));
+  const hasAta = id => S.atas[id] || Object.values(S.avaliacoes || {}).some(a => a.activityId === id);
+  const opts = G.map(([g, l]) => `<optgroup label="${g}">${l.map(([n]) => `<option value="${idOf(n)}" ${idOf(n) === m.id ? 'selected' : ''}>${hasAta(idOf(n)) ? '✓ ' : ''}${n}</option>`).join('')}</optgroup>`).join('') +
+    (S.customAtas.length ? `<optgroup label="Personalizadas">${S.customAtas.map(x => `<option value="${x.id}" ${x.id === m.id ? 'selected' : ''}>${hasAta(x.id) ? '✓ ' : ''}${esc(x.n)}</option>`).join('')}</optgroup>` : '');
   const dis = admin ? '' : 'disabled', head = `<th></th>${TEAMS.map(t => `<th style="color:var(--${t.id})">${t.s}</th>`).join('')}`;
-  return `<h2>Ata dos juízes</h2><p class=mute>${done.length} de ${activities.length} atas registradas.</p>
+  const legacyAlreadyMigrated = legacy?.juiz && evals.some(a => a.juizId === judgeKey(legacy.juiz));
+  const allEvals = [...(legacy && !legacyAlreadyMigrated ? [{ juiz: legacy.juiz || 'Registro anterior', obs: legacy.obs, s: legacy.s, ts: legacy.ts }] : []), ...evals];
+  const score = team => activityTotal(legacy ? { ...legacy, id: m.id } : null, S.avaliacoes, team);
+  return `<h2>Ata dos juízes</h2><p class=mute>${done.length} de ${activities.length} modalidades com avaliações registradas.</p>
 <label for=am>Modalidade</label><select id=am data-c=ata>${opts}</select>
+<div class=judge-picker>
+<label for=juiz>Quem está avaliando?</label><div class=judge-picker-row><input id=juiz maxlength=100 placeholder="Digite seu nome" value="${esc(d.juiz || localJudgeName)}" ${dis}>
+<button class=btn data-a=loadJudge ${dis}>Abrir avaliação</button></div>
+${ownId ? `<p class=judge-status role=status>Avaliando: ${esc(localJudgeName)}</p>` : ''}
+</div>
 <div class=tw style="margin-top:12px"><table class=ata><thead><tr>${head}</tr></thead><tbody>${m.c.map((c, i) => `<tr><th scope=row>${esc(c)}</th>${ids.map(t => `<td><input type=number step=.5 inputmode=decimal data-t=${t} data-i=live value="${s[t]?.[i] ?? ''}" aria-label="${esc(c)}, ${T[t].s}" ${dis}></td>`).join('')}</tr>`).join('')}</tbody>
 <tfoot><tr><th scope=row>Total</th>${ids.map(t => `<td id=tt-${t}>${sum(s[t])}</td>`).join('')}</tr></tfoot></table></div>
-<label for=juiz>Juiz</label><input id=juiz value="${esc(d.juiz)}" ${dis}>
 <label for=obs>Observações</label><textarea id=obs rows=3 ${dis}>${esc(d.obs)}</textarea>
-<button class=btn data-a=saveAta ${dis}>Salvar ata</button>
+<button class=btn data-a=saveAta ${dis}>Salvar avaliação</button>
+${allEvals.length ? `<h3>Avaliações desta modalidade</h3><ul class=hist>${allEvals.map(a => `<li><b>${esc(a.juiz || 'Juiz')}</b><span>${ids.map(t => `${T[t].s}: ${sum(a.s?.[t])}`).join(' · ')}${a.obs ? ` · ${esc(a.obs)}` : ''}</span><time>${a.ts ? new Date(a.ts).toLocaleString('pt-BR') : ''}</time><span></span></li>`).join('')}</ul>` : '<p class=mute>Nenhuma avaliação registrada para esta modalidade.</p>'}
+<p><b>Total somado no placar:</b> ${ids.map(t => `${T[t].s}: ${score(t)}`).join(' · ')}</p>
 ${admin ? `<section class=custom-ata><h2>Adicionar ata</h2><p class=mute>Crie uma modalidade com os critérios que serão pontuados para cada equipe.</p>
 <label for=custom-name>Nome da ata</label><input id=custom-name maxlength=100 data-draft-name value="${esc(ataDraft.n)}">
 <h3>Critérios</h3>${ataDraft.c.map((c, i) => `<div class=row><input maxlength=120 aria-label="Critério ${i + 1}" data-draft-criterion="${i}" value="${esc(c)}" placeholder="Nome do critério">${ataDraft.c.length > 1 ? `<button class=x data-a=removeCriterion data-n="${i}" aria-label="Remover critério ${i + 1}">✕</button>` : ''}</div>`).join('')}
 <button class=btn data-a=addCriterion>Adicionar critério</button><button class=btn data-a=saveCustomAta>Salvar nova ata</button></section>` : ''}
-<h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const a = S.atas[x.id], v = ids.map(t => sum(a.s[t])), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${esc(x.n)}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar ata ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
+<h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const old = S.atas[x.id], v = ids.map(t => activityTotal(old ? { ...old, id: x.id } : null, S.avaliacoes, t)), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${esc(x.n)}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar avaliações de ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
 }
 function vEq() {
   return `<h2>Equipes</h2><p class=mute>Consulte os integrantes e, como administrador, altere os nomes e cargos quando necessário.</p>${TEAMS.map(t => { const e = eq(t.id), count = e.m.filter(Boolean).length + Number(Boolean(e.l)) + Number(Boolean(e.v)); return `<details data-team=${t.id} ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt=""><span>${t.n}<br><small class=mute>${count} integrantes</small></span></summary>
@@ -195,13 +206,20 @@ const act = {
   launch: () => { if (!K.v) return; const o = { t: K.t, v: K.v, m: K.m.trim(), ts: Date.now() }; guard(st.addAj(o)).then(saved => { if (saved) { K.m = ''; render(); } }); },
   del: d => { if (admin && confirm('Apagar este lançamento de katricos?')) guard(st.delAj(d.id)); },
   delAta: d => {
-    if (!admin || !confirm('Apagar esta ata? Esta ação não pode ser desfeita.')) return;
+    if (!admin || !confirm('Apagar todas as avaliações desta modalidade? Esta ação não pode ser desfeita.')) return;
     guard(st.delAta(d.id)).then(saved => {
       if (saved) {
         if (A === d.id) A = M[0].id;
         render();
       }
     });
+  },
+  loadJudge: () => {
+    if (!admin) return;
+    const name = $('#juiz').value.trim();
+    if (!name || !judgeKey(name)) { toast('Informe um nome de juiz válido.'); return; }
+    localJudgeName = name;
+    render();
   },
   togglePause: () => {
     if (!admin || !S.dataLoaded) return;
@@ -336,7 +354,15 @@ const act = {
     guard(st.saveMega({ ...mega, scores: { ...mega.scores, [d.id]: score } })).then(saved => { if (saved) render(); });
   },
   openAta: d => { A = d.id; render(); scrollTo(0, 0); },
-  saveAta: () => { const s = { pp: [], sl: [], gg: [] }; document.querySelectorAll('input[data-t]').forEach(i => s[i.dataset.t].push(+i.value || 0)); guard(st.saveAta(A, { s, juiz: $('#juiz').value.trim(), obs: $('#obs').value.trim(), ts: Date.now() })); },
+  saveAta: () => {
+    if (!admin) return;
+    const juiz = $('#juiz').value.trim(), judgeId = judgeKey(juiz);
+    if (!juiz || !judgeId) { toast('Informe o nome do juiz antes de salvar.'); return; }
+    if (judgeId !== judgeKey(localJudgeName)) { toast('Clique em “Carregar avaliação” para abrir ou iniciar as notas deste juiz.'); return; }
+    const s = { pp: [], sl: [], gg: [] };
+    document.querySelectorAll('input[data-t]').forEach(i => s[i.dataset.t].push(+i.value || 0));
+    guard(st.saveAvaliacao(A, judgeId, { s, juiz, obs: $('#obs').value.trim(), ts: Date.now() }));
+  },
   addCriterion: () => { ataDraft.c.push(''); render(); },
   removeCriterion: d => { if (ataDraft.c.length > 1) ataDraft.c.splice(+d.n, 1); render(); },
   saveCustomAta: () => {
