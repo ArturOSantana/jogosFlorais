@@ -8,7 +8,7 @@ import * as st from './store.js';
 const ids = TEAMS.map(t => t.id), T = Object.fromEntries(TEAMS.map(t => [t.id, t]));
 const projectorMode = location.pathname.replace(/\/+$/, '') === '/megasenha/telao';
 let S = { atas: {}, avaliacoes: {}, aj: [], audit: [], auditLoaded: !st.cloud, auditError: null, eq: {}, customAtas: [], mega: DEFAULT_MEGA, megaLoaded: !st.cloud, dataLoaded: !st.cloud, placar: { paused: false, snapshot: null, loaded: !st.cloud } }, tab = 'placar', admin = false, localJudgeName = '', K = { t: 'pp', v: 5, m: '' }, A = M[0].id, pend = false, ataDraft = { n: '', c: [''] }, auditFilters = { team: '', source: '', search: '', from: '', to: '' };
-let MD = { teamId: 'pp', listId: '', clueGiver: '', durationSeconds: null, pointsPerCorrect: null, penalty: null, skipLimit: null, newListName: '', newListWords: '' }, timerEndedRoundId = '', timerStartedRoundId = '', timerSecond = -1, projectorError = null, stopProjectorWatch;
+let MD = { teamId: 'pp', listId: '', clueGiver: '', durationSeconds: null, pointsPerCorrect: null, penalty: null, skipLimit: null, newListName: '', newListWords: '' }, timerEndedRoundId = '', timerStartedRoundId = '', timerSecond = -1, projectorError = null, stopProjectorWatch, projectorMarkup = '', enterFrame = 0, enterTimer;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(r2(n));
@@ -18,7 +18,18 @@ const eq = t => {
 };
 const col = t => `style="--c:var(--${t})"`;
 const toast = m => { const e = $('#toast'); e.textContent = m; e.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => e.classList.remove('on'), 2400); };
-const guard = p => Promise.resolve(p).then(() => { toast('Salvo'); return true; }).catch(err => { console.error('Não foi possível salvar.', err); toast('Não foi possível salvar. Verifique sua conexão e seu acesso de administrador.'); return false; });
+const guard = p => {
+  const operation = Promise.resolve(p);
+  if (st.cloud && !st.getSyncStatus().online && !st.getSyncStatus().persistenceError) {
+    operation.catch(err => {
+      console.error('Não foi possível sincronizar a alteração offline.', err);
+      toast('Não foi possível sincronizar. Verifique sua conexão e seu acesso de administrador.');
+    });
+    toast('Salvo neste aparelho; será sincronizado ao voltar a internet.');
+    return Promise.resolve(true);
+  }
+  return operation.then(() => { toast('Salvo'); return true; }).catch(err => { console.error('Não foi possível salvar.', err); toast('Não foi possível salvar. Verifique sua conexão e seu acesso de administrador.'); return false; });
+};
 
 const hist = (n, del) => S.aj.length
   ? `<ul class=hist>${S.aj.slice(0, n).map(a => `<li><b style="color:var(--${a.t})">${sgn(a.v)}</b><span>${T[a.t].s}${a.m ? ': ' + esc(a.m) : ''}</span><time>${new Date(a.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</time>${del && admin ? `<button class=x data-a=del data-id="${a.id}" aria-label="Remover lançamento">✕</button>` : '<span></span>'}</li>`).join('')}</ul>`
@@ -29,10 +40,10 @@ function vPlacar() {
   if (!shown) return `<h1>Katricos</h1><p class=${S.placar.loaded && S.placar.paused ? 'note' : 'mute'} role=status>${S.placar.loaded && S.placar.paused ? 'O placar está pausado pela organização.' : 'Carregando placar...'}</p>`;
   const frozen = st.cloud && !admin && S.placar.paused;
   const tot = totals(ids, shown.atas, shown.aj, shown.avaliacoes), rk = ranking(ids, tot), mx = Math.max(1, ...ids.map(i => Math.abs(tot[i]))), started = Object.keys(shown.atas).length || Object.keys(shown.avaliacoes || {}).length || shown.aj.length;
-  return `<div class=hero style="display:flex;align-items:center;gap:14px"><img src="/img/jogos.png" alt="" height=72><div><h1>Katricos</h1><p class=mute style="margin:0">Jogos Florais 2026</p></div></div>
+  return `<div class=hero style="display:flex;align-items:center;gap:14px"><img src="/img/jogos.png" alt="" height=72 decoding=async><div><h1>Katricos</h1><p class=mute style="margin:0">Jogos Florais 2026</p></div></div>
 ${frozen ? `<p class=note role=status>Atualização do placar pausada pela organização.</p>` : ''}
 ${admin ? `<button class=btn data-a=togglePause ${!S.dataLoaded ? 'disabled' : ''}>${S.placar.paused ? 'Retomar atualização para leitores' : 'Pausar atualização para leitores'}</button>${!S.dataLoaded ? '<p class=mute>Aguarde o carregamento dos dados para pausar o placar.</p>' : !S.placar.paused ? '<p class=mute>Leitores acompanham a pontuação em tempo real.</p>' : ''}` : ''}
-<section class=stage><i class=rod></i><div class=banners>${TEAMS.map(t => { const p = rk.find(r => r.id === t.id); return `<article class=bn style="--c:var(--${t.id});--k:${Math.max(0, tot[t.id]) / mx}"><span class=pos>${started ? p.pos + 'º' : '–'}</span><img src="/img/${t.id}.jpg" alt="${t.n}"><div class=nm>${t.s}</div><div class=big>${r2(tot[t.id])}</div><div class=un>katricos</div></article>`; }).join('')}</div></section>
+<section class=stage><i class=rod></i><div class=banners>${TEAMS.map(t => { const p = rk.find(r => r.id === t.id); return `<article class=bn style="--c:var(--${t.id});--k:${Math.max(0, tot[t.id]) / mx}"><span class=pos>${started ? p.pos + 'º' : '–'}</span><img src="/img/${t.id}.jpg" alt="${t.n}" decoding=async><div class=nm>${t.s}</div><div class=big>${r2(tot[t.id])}</div><div class=un>katricos</div></article>`; }).join('')}</div></section>
 ${admin ? `<table class=comp><thead><tr><th></th>${TEAMS.map(t => `<th style="color:var(--${t.id})">${t.s}</th>`).join('')}</tr></thead><tbody>
 <tr><th>Atas</th>${ids.map(i => `<td>${ataTotal(S.atas, i, S.avaliacoes)}</td>`).join('')}</tr>
 <tr><th>Ajustes</th>${ids.map(i => `<td>${sgn(ajusteTotal(S.aj, i))}</td>`).join('')}</tr></tbody></table>
@@ -136,7 +147,7 @@ ${admin ? `<section class=custom-ata><h2>Adicionar ata</h2><p class=mute>Crie um
 <h2>Atas registradas</h2>${done.length ? `<div class=tw><table class=ata><thead><tr>${head}${admin ? '<th>Ação</th>' : ''}</tr></thead><tbody>${done.map(x => { const old = S.atas[x.id], v = ids.map(t => activityTotal(x.id, old, S.avaliacoes, t)), mx = Math.max(...v); return `<tr><th scope=row><a href="#" data-a=openAta data-id=${x.id} style="color:inherit">${esc(x.n)}</a></th>${v.map(n => `<td style="${n === mx && n > 0 ? 'font-weight:800' : ''}">${n}</td>`).join('')}${admin ? `<td><button class=x data-a=delAta data-id="${x.id}" aria-label="Apagar avaliações de ${esc(x.n)}">✕</button></td>` : ''}</tr>`; }).join('')}</tbody></table></div>` : '<p class=mute>Nenhuma ata salva ainda.</p>'}`;
 }
 function vEq() {
-  return `<h2>Equipes</h2><p class=mute>Consulte os integrantes e, como administrador, altere os nomes e cargos quando necessário.</p>${TEAMS.map(t => { const e = eq(t.id), count = e.m.filter(Boolean).length + Number(Boolean(e.l)) + Number(Boolean(e.v)); return `<details data-team=${t.id} ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt=""><span>${t.n}<br><small class=mute>${count} integrantes</small></span></summary>
+  return `<h2>Equipes</h2><p class=mute>Consulte os integrantes e, como administrador, altere os nomes e cargos quando necessário.</p>${TEAMS.map(t => { const e = eq(t.id), count = e.m.filter(Boolean).length + Number(Boolean(e.l)) + Number(Boolean(e.v)); return `<details data-team=${t.id} ${col(t.id)}><summary><img src="/img/${t.id}.jpg" alt="" loading=lazy decoding=async><span>${t.n}<br><small class=mute>${count} integrantes</small></span></summary>
 <p><a class=team-ig href="${esc(t.ig)}" target=_blank rel="noopener noreferrer">Instagram oficial de ${t.n} ↗</a></p>
 ${admin ? `<div class=team-editor><div class=team-fields><label>Líder<input data-role=l value="${esc(e.l)}" aria-label="Líder da equipe ${t.s}"></label><label>Vice-líder<input data-role=v value="${esc(e.v)}" aria-label="Vice-líder da equipe ${t.s}"></label></div>
 <h3>Integrantes</h3><ul class=names>${e.m.map((n, i) => `<li><input data-member value="${esc(n)}" aria-label="Integrante ${i + 1} da equipe ${t.s}"><button class=x data-a=rm data-id=${t.id} data-n=${i} aria-label="Remover integrante ${i + 1}">✕</button></li>`).join('')}</ul>
@@ -194,7 +205,8 @@ function vMegaProjector() {
     const message = permissionDenied
       ? 'O Firestore recusou a leitura do telão.'
       : 'Não foi possível sincronizar o telão. Verifique a conexão e tente novamente.';
-    $('#app').innerHTML = `<div class="projector projector-error" role=alert><p>${message}</p>${permissionDenied ? `<p>Projeto conectado: <b>${esc(st.firebaseProjectId || 'não identificado')}</b></p><p>No Firestore desse projeto, publique a regra <code>match /megasenha/{id} { allow get: if id == 'state'; }</code> e tente novamente.</p>` : ''}<button class=btn data-a=retryProjector>Tentar novamente</button></div>`;
+    const markup = `<div class="projector projector-error" role=alert><p>${message}</p>${permissionDenied ? `<p>Projeto conectado: <b>${esc(st.firebaseProjectId || 'não identificado')}</b></p><p>No Firestore desse projeto, publique a regra <code>match /megasenha/{id} { allow get: if id == 'state'; }</code> e tente novamente.</p>` : ''}<button class=btn data-a=retryProjector>Tentar novamente</button></div>`;
+    if (markup !== projectorMarkup) { projectorMarkup = markup; $('#app').innerHTML = markup; }
     return;
   }
   const mega = normalizeMega(S.mega), round = mega.round;
@@ -214,7 +226,7 @@ function vMegaProjector() {
     ? `Próxima equipe: ${T[round.teamId]?.n || 'Equipe'}`
     : round.status === 'finished' ? `Fim da rodada · ${round.correct} acertos` : '';
   const showWord = playing && round && countdownMs <= 0;
-  $('#app').innerHTML = `<div class=projector>
+  const markup = `<div class=projector>
 <header class=projector-head><span>${round ? esc(T[round.teamId]?.n || 'Equipe') : 'Jogos Florais'}</span>${round?.clueGiver ? `<span>Dicas: ${esc(round.clueGiver)}</span>` : ''}</header>
 <section class=projector-center>
 ${stateText ? `<p class=projector-state>${esc(stateText)}</p>` : ''}
@@ -225,8 +237,9 @@ ${(playing || paused) ? `<p class="projector-time ${seconds <= 10 && playing ? '
 </section>
 <footer class=projector-footer>${rankingRows.map(team => `<span>${esc(T[team.id]?.s || team.id)}: <b>${team.points}</b></span>`).join('')}</footer>
 </div>`;
+  if (markup !== projectorMarkup) { projectorMarkup = markup; $('#app').innerHTML = markup; }
 }
-function render() {
+function render(animate = false) {
   if (projectorMode) { vMegaProjector(); return; }
   if (st.cloud && !admin && !['placar', 'info'].includes(tab)) tab = 'placar';
   if (st.cloud && admin && tab === 'info') tab = 'placar';
@@ -236,8 +249,23 @@ function render() {
   $('#tabs').style.gridTemplateColumns = `repeat(${visibleTabs.length}, 1fr)`;
   $('#tabs').classList.toggle('readonly', st.cloud && !admin);
   $('#who').textContent = !st.cloud ? 'Modo local' : admin ? 'Sair' : 'Entrar';
+  const sync = st.getSyncStatus();
+  const syncStatus = $('#sync-status');
+  syncStatus.textContent = !st.cloud ? 'Só neste aparelho' : sync.persistenceError ? (sync.online ? 'Sem cache offline' : 'Offline indisponível') : !S.dataLoaded ? 'Carregando dados…' : !sync.online ? (sync.pending ? 'Offline · pendente' : 'Offline') : sync.pending ? 'Sincronizando…' : 'Online · sincronizado';
+  syncStatus.title = sync.persistenceError || '';
   const note = !st.cloud ? '<p class=note>Firebase não configurado: os dados ficam só neste aparelho.</p>' : '';
-  $('#app').innerHTML = note + { placar: vPlacar, info: vInfo, kat: vKat, ata: vAta, eq: vEq, mega: vMega, audit: vAudit }[tab]();
+  const app = $('#app');
+  if (enterFrame) cancelAnimationFrame(enterFrame);
+  clearTimeout(enterTimer);
+  app.classList.remove('is-entering');
+  app.innerHTML = note + { placar: vPlacar, info: vInfo, kat: vKat, ata: vAta, eq: vEq, mega: vMega, audit: vAudit }[tab]();
+  if (animate) {
+    enterFrame = requestAnimationFrame(() => {
+      enterFrame = 0;
+      app.classList.add('is-entering');
+    });
+    enterTimer = setTimeout(() => app.classList.remove('is-entering'), 500);
+  }
 }
 const refresh = () => { if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) { pend = true; return; } render(); };
 document.addEventListener('focusout', () => { if (pend) { pend = false; setTimeout(refresh, 60); } });
@@ -254,7 +282,7 @@ const act = {
   retryProjector: () => {
     if (projectorMode && st.cloud) subscribeProjector();
   },
-  tab: d => { if (st.cloud && ((!admin && !['placar', 'info'].includes(d.id)) || (admin && d.id === 'info'))) return; tab = d.id; render(); scrollTo(0, 0); },
+  tab: d => { if (st.cloud && ((!admin && !['placar', 'info'].includes(d.id)) || (admin && d.id === 'info'))) return; tab = d.id; render(true); scrollTo(0, 0); },
   team: d => { K.t = d.id; render(); },
   val: d => { K.v = +d.n; render(); },
   launch: () => { if (!K.v) return; const o = { t: K.t, v: K.v, m: K.m.trim(), ts: Date.now() }; guard(st.addAj(o)).then(saved => { if (saved) { K.m = ''; render(); } }); },
@@ -274,7 +302,7 @@ const act = {
     const name = $('#juiz').value.trim();
     if (!name || !judgeKey(name)) { toast('Informe um nome de juiz válido.'); return; }
     localJudgeName = name;
-    render();
+    render(true);
   },
   togglePause: () => {
     if (!admin || !S.dataLoaded) return;
@@ -559,6 +587,12 @@ $('#who').onclick = () => {
   d.querySelector('form').onsubmit = async ev => { ev.preventDefault(); try { await st.login(d.querySelector('#em').value, d.querySelector('#pw').value); d.close(); d.remove(); } catch (err) { toast(err.message === 'admin-config' ? 'Configure o e-mail administrador no Firebase.' : 'Login ou senha incorretos.'); } };
   d.onclick = ev => { if (ev.target === d) { d.close(); d.remove(); } };
 };
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(err => {
+    console.error('Não foi possível preparar o app para uso offline.', err);
+    toast('Não foi possível preparar o app para uso offline.');
+  });
+}
 if (projectorMode) {
   document.body.classList.add('mega-projector');
   document.title = 'Mega Senha · Telão';
